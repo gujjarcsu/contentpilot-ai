@@ -133,6 +133,7 @@ model GenerationJob {
   failedProducts    Int       @default(0)
   productIds        String    @default("[]")     // JSON array of Shopify Product GIDs
   contentTypes      String    @default("description") // comma-separated
+  autoPublish       Boolean   @default(false)          // push to Shopify immediately after generation
   errorLog          String?   // JSON array of { productId, error }
   startedAt         DateTime?
   completedAt       DateTime?

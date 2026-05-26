@@ -116,6 +116,8 @@ export const action = async ({ request }) => {
   if (selectedIds.length === 0) return { error: "No products selected." };
   if (contentTypes.length === 0) return { error: "Select at least one content type." };
 
+  const autoPublish = formData.get("bulk_autoPublish") === "true";
+
   const job = await prisma.generationJob.create({
     data: {
       shop,
@@ -123,6 +125,7 @@ export const action = async ({ request }) => {
       totalProducts: selectedIds.length,
       productIds: JSON.stringify(selectedIds),
       contentTypes: contentTypes.join(","),
+      autoPublish,
     },
   });
 
@@ -141,6 +144,7 @@ export default function ProductsPage() {
   const [bulkDesc, setBulkDesc] = useState(true);
   const [bulkMeta, setBulkMeta] = useState(true);
   const [bulkFaq, setBulkFaq] = useState(false);
+  const [bulkAutoPublish, setBulkAutoPublish] = useState(false);
   const [bulkError, setBulkError] = useState("");
 
   const handleSearchChange = useCallback((v) => setSearchValue(v), []);
@@ -212,8 +216,9 @@ export default function ProductsPage() {
     fd.append("bulk_metaTitle", bulkMeta.toString());
     fd.append("bulk_metaDescription", bulkMeta.toString());
     fd.append("bulk_faq", bulkFaq.toString());
+    fd.append("bulk_autoPublish", bulkAutoPublish.toString());
     submit(fd, { method: "POST" });
-  }, [selectedItems, bulkDesc, bulkMeta, bulkFaq, submit]);
+  }, [selectedItems, bulkDesc, bulkMeta, bulkFaq, bulkAutoPublish, submit]);
 
   return (
     <Page
@@ -272,7 +277,7 @@ export default function ProductsPage() {
 
               {bulkError && <Banner tone="critical"><p>{bulkError}</p></Banner>}
 
-              <InlineStack gap="500" wrap={false}>
+              <InlineStack gap="500" wrap>
                 <Checkbox
                   label="Description"
                   checked={bulkDesc}
@@ -290,6 +295,12 @@ export default function ProductsPage() {
                   checked={bulkFaq}
                   onChange={setBulkFaq}
                   helpText="Q&A pairs"
+                />
+                <Checkbox
+                  label="Auto-publish"
+                  checked={bulkAutoPublish}
+                  onChange={setBulkAutoPublish}
+                  helpText="Push to Shopify immediately — skips review"
                 />
               </InlineStack>
 

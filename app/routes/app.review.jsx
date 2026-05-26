@@ -102,8 +102,10 @@ export const action = async ({ request }) => {
 
   if (actionType === "publish") {
     let approved;
+    let edits = {};
     try {
       approved = JSON.parse(formData.get("approved") || "[]");
+      edits = JSON.parse(formData.get("edits") || "{}");
     } catch {
       return Response.json({ error: "Invalid submission data." }, { status: 400 });
     }
@@ -127,7 +129,8 @@ export const action = async ({ request }) => {
     const errors = [];
 
     for (const productId of approved) {
-      const content = byProduct[productId] || {};
+      // Merge DB drafts with any inline edits (edits take precedence)
+      const content = { ...byProduct[productId], ...edits[productId] };
       const input = { id: productId };
       if (content.description) input.descriptionHtml = content.description;
       if (content.metaTitle || content.metaDescription) {
@@ -210,6 +213,15 @@ export default function ReviewPage() {
 
   const [approved, setApproved] = useState(() => new Set(products.map((p) => p.productId)));
   const [search, setSearch] = useState("");
+  // edits: { [productId]: { [contentType]: editedValue } }
+  const [edits, setEdits] = useState({});
+
+  const handleEdit = useCallback((productId, type, value) => {
+    setEdits((prev) => ({
+      ...prev,
+      [productId]: { ...prev[productId], [type]: value },
+    }));
+  }, []);
 
   const toggleApproved = useCallback((productId) => {
     setApproved((prev) => {
@@ -230,8 +242,9 @@ export default function ReviewPage() {
     const fd = new FormData();
     fd.append("actionType", "publish");
     fd.append("approved", JSON.stringify([...approved]));
+    fd.append("edits", JSON.stringify(edits));
     submit(fd, { method: "POST" });
-  }, [approved, submit]);
+  }, [approved, edits, submit]);
 
   const handleRejectUnapproved = useCallback(() => {
     const rejectedIds = products
@@ -344,6 +357,7 @@ export default function ReviewPage() {
               product={product}
               isApproved={approved.has(product.productId)}
               onToggle={() => toggleApproved(product.productId)}
+              onEdit={(type, value) => handleEdit(product.productId, type, value)}
             />
           ))}
         </BlockStack>
@@ -369,7 +383,7 @@ export default function ReviewPage() {
   );
 }
 
-function ProductReviewCard({ product, isApproved, onToggle }) {
+function ProductReviewCard({ product, isApproved, onToggle, onEdit }) {
   const [expanded, setExpanded] = useState({});
   const toggleExpand = (type) =>
     setExpanded((prev) => ({ ...prev, [type]: !prev[type] }));
@@ -416,6 +430,7 @@ function ProductReviewCard({ product, isApproved, onToggle }) {
             content={product.content[type]}
             expanded={!!expanded[type]}
             onToggle={() => toggleExpand(type)}
+            onEdit={(value) => onEdit(type, value)}
           />
         ))}
       </BlockStack>
@@ -423,7 +438,9 @@ function ProductReviewCard({ product, isApproved, onToggle }) {
   );
 }
 
-function ContentSection({ type, content, expanded, onToggle }) {
+function ContentSection({ type, content, expanded, onToggle, onEdit }) {
+  const [editedValue, setEditedValue] = useState(content);
+
   const labels = {
     description: "Description",
     metaTitle: "Meta Title",
@@ -431,27 +448,41 @@ function ContentSection({ type, content, expanded, onToggle }) {
     faq: "FAQ",
   };
 
+  const handleChange = useCallback((value) => {
+    setEditedValue(value);
+    onEdit(value);
+  }, [onEdit]);
+
   const preview =
     type === "description"
       ? content.replace(/<[^>]+>/g, "").substring(0, 120) + "…"
       : content.substring(0, 120) + (content.length > 120 ? "…" : "");
+
+  const charLimit = type === "metaTitle" ? 60 : type === "metaDescription" ? 155 : null;
+  const charCount = editedValue.length;
+  const overLimit = charLimit && charCount > charLimit;
 
   return (
     <BlockStack gap="200">
       <InlineStack align="space-between" blockAlign="center">
         <Text as="p" variant="bodySm" fontWeight="semibold">{labels[type] || type}</Text>
         <Button variant="plain" size="slim" onClick={onToggle}>
-          {expanded ? "Collapse" : "Expand"}
+          {expanded ? "Collapse" : "Edit"}
         </Button>
       </InlineStack>
       {expanded ? (
-        <Box padding="300" background="bg-surface-secondary" borderRadius="200">
-          {type === "description" ? (
-            <div dangerouslySetInnerHTML={{ __html: content }} />
-          ) : (
-            <Text as="p" variant="bodySm">{content}</Text>
-          )}
-        </Box>
+        <BlockStack gap="100">
+          <TextField
+            label=""
+            labelHidden
+            value={editedValue}
+            onChange={handleChange}
+            multiline={type === "description" ? 8 : type === "faq" ? 6 : 2}
+            helpText={charLimit ? `${charCount}/${charLimit} characters${overLimit ? " — too long" : ""}` : "Edit before publishing"}
+            error={overLimit ? `Shorten to under ${charLimit} characters` : ""}
+            autoComplete="off"
+          />
+        </BlockStack>
       ) : (
         <Text as="p" variant="bodySm" tone="subdued">{preview}</Text>
       )}

@@ -24,9 +24,20 @@ export async function generateProductContent(
 
   const prompt = buildPrompt(product, brandVoice, contentTypes, options);
 
-  const messageContent = product.imageUrl
+  // Collect up to 4 images for vision context
+  const imageUrls = [];
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    product.images.slice(0, 4).forEach((img) => {
+      const url = img?.url || img?.src;
+      if (url) imageUrls.push(url);
+    });
+  } else if (product.imageUrl) {
+    imageUrls.push(product.imageUrl);
+  }
+
+  const messageContent = imageUrls.length > 0
     ? [
-        { type: "image", source: { type: "url", url: product.imageUrl } },
+        ...imageUrls.map((url) => ({ type: "image", source: { type: "url", url } })),
         { type: "text", text: prompt },
       ]
     : prompt;

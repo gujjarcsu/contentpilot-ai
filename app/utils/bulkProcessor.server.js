@@ -97,33 +97,34 @@ export async function processBulkJob(jobId) {
         );
 
         const month = new Date().toISOString().slice(0, 7);
-        const saveOps = contentTypes
-          .filter((t) => generated[t])
-          .map((type) => {
-            const originalContent =
-              type === "description" ? product.descriptionHtml || "" :
-              type === "metaTitle" ? product.seo?.title || "" :
-              type === "metaDescription" ? product.seo?.description || "" : "";
+        const finalStatus = job.autoPublish ? "published" : "draft";
+        const generatedTypes = contentTypes.filter((t) => generated[t]);
 
-            return prisma.generatedContent.upsert({
-              where: { shop_productId_contentType: { shop: job.shop, productId, contentType: type } },
-              update: {
-                generatedContent: generated[type],
-                originalContent,
-                status: "draft",
-                version: { increment: 1 },
-              },
-              create: {
-                shop: job.shop,
-                productId,
-                productTitle: product.title,
-                contentType: type,
-                originalContent,
-                generatedContent: generated[type],
-                status: "draft",
-              },
-            });
+        const saveOps = generatedTypes.map((type) => {
+          const originalContent =
+            type === "description" ? product.descriptionHtml || "" :
+            type === "metaTitle" ? product.seo?.title || "" :
+            type === "metaDescription" ? product.seo?.description || "" : "";
+
+          return prisma.generatedContent.upsert({
+            where: { shop_productId_contentType: { shop: job.shop, productId, contentType: type } },
+            update: {
+              generatedContent: generated[type],
+              originalContent,
+              status: finalStatus,
+              version: { increment: 1 },
+            },
+            create: {
+              shop: job.shop,
+              productId,
+              productTitle: product.title,
+              contentType: type,
+              originalContent,
+              generatedContent: generated[type],
+              status: finalStatus,
+            },
           });
+        });
 
         await Promise.all([
           ...saveOps,
@@ -137,6 +138,20 @@ export async function processBulkJob(jobId) {
             },
           }),
         ]);
+
+        // Auto-publish: push content directly to Shopify
+        if (job.autoPublish && generatedTypes.length > 0) {
+          const input = { id: productId };
+          if (generated.description) input.descriptionHtml = generated.description;
+          if (generated.metaTitle || generated.metaDescription) {
+            input.seo = {};
+            if (generated.metaTitle) input.seo.title = generated.metaTitle;
+            if (generated.metaDescription) input.seo.description = generated.metaDescription;
+          }
+          if (Object.keys(input).length > 1) {
+            await publishToShopify(session, productId, input);
+          }
+        }
 
         completedCount++;
         localUsageCount++;
@@ -181,6 +196,33 @@ export async function processBulkJob(jobId) {
         })
         .catch(() => {});
     }
+  }
+}
+
+async function publishToShopify(session, productId, input) {
+  const res = await fetch(
+    `https://${session.shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": session.accessToken,
+      },
+      body: JSON.stringify({
+        query: `mutation updateProduct($input: ProductInput!) {
+          productUpdate(input: $input) {
+            product { id }
+            userErrors { field message }
+          }
+        }`,
+        variables: { input },
+      }),
+    }
+  );
+  const { data } = await res.json();
+  const errors = data?.productUpdate?.userErrors ?? [];
+  if (errors.length > 0) {
+    throw new Error(errors.map((e) => e.message).join("; "));
   }
 }
 

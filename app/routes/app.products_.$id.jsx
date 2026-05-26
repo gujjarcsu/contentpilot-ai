@@ -317,6 +317,36 @@ export async function action({ request, params }) {
       });
     }
 
+    // Write FAQ JSON-LD as a metafield so Liquid themes can embed structured data
+    const faqRecord = await prisma.generatedContent.findUnique({
+      where: { shop_productId_contentType: { shop, productId, contentType: "faq" } },
+    });
+    if (faqRecord?.generatedContent) {
+      const { faqToJsonLd } = await import("../utils/seo.server.js");
+      const jsonLd = faqToJsonLd(faqRecord.generatedContent);
+      if (jsonLd) {
+        await admin.graphql(
+          `mutation setMetafields($metafields: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $metafields) {
+              metafields { id }
+              userErrors { field message }
+            }
+          }`,
+          {
+            variables: {
+              metafields: [{
+                ownerId: productId,
+                namespace: "contentpilot",
+                key: "faq_schema",
+                type: "json",
+                value: JSON.stringify(jsonLd),
+              }],
+            },
+          }
+        );
+      }
+    }
+
     return { success: true, published: true, message: "Content published to your Shopify store!" };
   }
 
