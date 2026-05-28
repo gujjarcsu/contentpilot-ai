@@ -3,7 +3,7 @@ import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   TextField, Select, Button, Banner, Box, Checkbox, Divider, Badge,
 } from "@shopify/polaris";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
@@ -144,6 +144,20 @@ export default function SettingsPage() {
   const [tplKeywords, setTplKeywords] = useState("");
   const [tplInstructions, setTplInstructions] = useState("");
   const [tplDefault, setTplDefault] = useState(false);
+
+  const prevActionData = useRef(null);
+  useEffect(() => {
+    if (actionData && actionData !== prevActionData.current) {
+      prevActionData.current = actionData;
+      if (typeof window !== "undefined" && window.shopify?.toast) {
+        if (actionData.success) {
+          window.shopify.toast.show(actionData.message ?? "Saved!", { duration: 4000 });
+        } else if (actionData.error) {
+          window.shopify.toast.show(actionData.error, { duration: 5000, isError: true });
+        }
+      }
+    }
+  }, [actionData]);
 
   const toneOptions = [
     { label: "Professional & Trustworthy", value: "professional" },

@@ -1,4 +1,4 @@
-import { useLoaderData, useNavigate, useSubmit, redirect, useSearchParams } from "react-router";
+import { useLoaderData, useNavigate, useSubmit, redirect, useSearchParams, useNavigation } from "react-router";
 import {
   Page,
   Layout,
@@ -18,6 +18,10 @@ import {
   Box,
   Tabs,
   Modal,
+  SkeletonPage,
+  SkeletonBodyText,
+  SkeletonDisplayText,
+  SkeletonThumbnail,
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 import { authenticate } from "../shopify.server";
@@ -171,10 +175,43 @@ export const action = async ({ request }) => {
   return redirect("/app/jobs");
 };
 
+function ProductListSkeleton() {
+  return (
+    <SkeletonPage primaryAction>
+      <Layout>
+        {[1, 2, 3].map((i) => (
+          <Layout.Section key={i} variant="oneThird">
+            <Card>
+              <BlockStack gap="300">
+                <SkeletonDisplayText size="small" />
+                <SkeletonBodyText lines={1} />
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        ))}
+      </Layout>
+      <Card>
+        <BlockStack gap="400">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <InlineStack key={i} gap="400" blockAlign="center">
+              <SkeletonThumbnail size="medium" />
+              <BlockStack gap="200">
+                <SkeletonDisplayText size="small" />
+                <SkeletonBodyText lines={1} />
+              </BlockStack>
+            </InlineStack>
+          ))}
+        </BlockStack>
+      </Card>
+    </SkeletonPage>
+  );
+}
+
 export default function ProductsPage() {
   const { products, statusMap, pageInfo, statusFilter, dbCounts } = useLoaderData();
   const navigate = useNavigate();
   const submit = useSubmit();
+  const navigation = useNavigation();
   const [, setSearchParams] = useSearchParams();
 
   const [searchValue, setSearchValue] = useState("");
@@ -189,7 +226,7 @@ export default function ProductsPage() {
   const handleSearchChange = useCallback((v) => setSearchValue(v), []);
   const handleSearchClear = useCallback(() => setSearchValue(""), []);
 
-  // Filter products by selected tab
+  // Derived values (no hooks below this line — safe for early return)
   const tabFilteredProducts = products.filter((p) => {
     if (statusFilter === "draft") return statusMap[p.id]?.status === "draft";
     if (statusFilter === "published") return statusMap[p.id]?.status === "published";
@@ -273,6 +310,8 @@ export default function ProductsPage() {
     setGenerateAllModal(false);
     submit(buildBulkFormData("generateAll", null), { method: "POST" });
   }, [bulkDesc, bulkMeta, bulkFaq, buildBulkFormData, setGenerateAllModal, submit]);
+
+  if (navigation.state === "loading") return <ProductListSkeleton />;
 
   return (
     <Page

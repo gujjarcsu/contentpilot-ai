@@ -31,20 +31,25 @@ export async function getMonthlyUsageCount(shop) {
 /**
  * Read-only gate: returns current plan state and usage.
  * Use tryConsumeGeneration() for the actual gate check + atomic write.
+ * Result is cached for 60 s to reduce DB load on page loads.
  */
 export async function canGenerate(shop) {
-  const [plan, usageCount] = await Promise.all([
-    getOrCreatePlan(shop),
-    getMonthlyUsageCount(shop),
-  ]);
-  const allowed = plan.status === "active" && usageCount < plan.monthlyLimit;
-  return {
-    allowed,
-    usageCount,
-    monthlyLimit: plan.monthlyLimit,
-    planName: plan.planName,
-    remaining: Math.max(0, plan.monthlyLimit - usageCount),
-  };
+  const month = new Date().toISOString().slice(0, 7);
+  const cacheKey = `canGenerate:${shop}:${month}`;
+  return getCache(cacheKey, async () => {
+    const [plan, usageCount] = await Promise.all([
+      getOrCreatePlan(shop),
+      getMonthlyUsageCount(shop),
+    ]);
+    const allowed = plan.status === "active" && usageCount < plan.monthlyLimit;
+    return {
+      allowed,
+      usageCount,
+      monthlyLimit: plan.monthlyLimit,
+      planName: plan.planName,
+      remaining: Math.max(0, plan.monthlyLimit - usageCount),
+    };
+  }, 60);
 }
 
 /**
@@ -121,6 +126,9 @@ export async function tryConsumeGeneration(shop, contentType, productId = null) 
         timeout: 10_000,
       }
     );
+    if (result.allowed) {
+      await invalidateCache(`canGenerate:${shop}:${month}`);
+    }
     return result;
   } catch (err) {
     // P2034 = "Transaction failed due to a write conflict or a deadlock"

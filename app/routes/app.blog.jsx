@@ -13,7 +13,7 @@ import {
   Box,
   Spinner,
 } from "@shopify/polaris";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
@@ -126,6 +126,20 @@ export default function BlogPage() {
   const [topic, setTopic] = useState("");
   const [keywords, setKeywords] = useState(brandVoice?.targetKeywords || "");
   const [length, setLength] = useState("medium");
+
+  const prevActionData = useRef(null);
+  useEffect(() => {
+    if (actionData && actionData !== prevActionData.current) {
+      prevActionData.current = actionData;
+      if (typeof window !== "undefined" && window.shopify?.toast) {
+        if (actionData.published) {
+          window.shopify.toast.show("Blog post published!", { duration: 4000 });
+        } else if (actionData.error) {
+          window.shopify.toast.show(actionData.error, { duration: 5000, isError: true });
+        }
+      }
+    }
+  }, [actionData]);
 
   const generated = actionData?.generated;
 

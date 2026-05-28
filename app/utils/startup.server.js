@@ -69,6 +69,9 @@ export function runStartupChecks() {
   if (process.env.NODE_ENV === "production" && !process.env.CONTENTPILOT_API_TOKEN) {
     warnings.push("CONTENTPILOT_API_TOKEN not set — /api/generate external endpoint will reject all requests");
   }
+  if (process.env.NODE_ENV === "production" && !process.env.SENTRY_DSN) {
+    warnings.push("SENTRY_DSN not set — runtime errors will not be captured by Sentry");
+  }
 
   warnings.forEach((w) => logger.warn(`⚠️ STARTUP: ${w}`));
   if (warnings.length === 0) {

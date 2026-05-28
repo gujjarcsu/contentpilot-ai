@@ -1,4 +1,4 @@
-import { useLoaderData, useNavigate, useRevalidator, useFetcher, useSubmit } from "react-router";
+import { useLoaderData, useNavigate, useRevalidator, useFetcher } from "react-router";
 import {
   Page,
   Layout,
@@ -139,6 +139,34 @@ export default function JobsPage() {
   // Resets to 5 s as soon as a job makes progress.
   const pollIntervalRef = useRef(5000);
   const prevProgressRef = useRef(null);
+  const prevRetryData = useRef(null);
+  const prevCancelData = useRef(null);
+
+  useEffect(() => {
+    if (retryFetcher.data && retryFetcher.data !== prevRetryData.current) {
+      prevRetryData.current = retryFetcher.data;
+      if (typeof window !== "undefined" && window.shopify?.toast) {
+        if (retryFetcher.data.success) {
+          window.shopify.toast.show("Job re-queued successfully.", { duration: 4000 });
+        } else if (retryFetcher.data.error) {
+          window.shopify.toast.show(retryFetcher.data.error, { duration: 5000, isError: true });
+        }
+      }
+    }
+  }, [retryFetcher.data]);
+
+  useEffect(() => {
+    if (cancelFetcher.data && cancelFetcher.data !== prevCancelData.current) {
+      prevCancelData.current = cancelFetcher.data;
+      if (typeof window !== "undefined" && window.shopify?.toast) {
+        if (cancelFetcher.data.success) {
+          window.shopify.toast.show("Job cancelled.", { duration: 3000 });
+        } else if (cancelFetcher.data.error) {
+          window.shopify.toast.show(cancelFetcher.data.error, { duration: 5000, isError: true });
+        }
+      }
+    }
+  }, [cancelFetcher.data]);
 
   useEffect(() => {
     if (!hasActiveJobs) {

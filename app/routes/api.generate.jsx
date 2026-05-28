@@ -33,10 +33,17 @@ async function verifyRequest(request, rawBody) {
     return { ok: true };
   }
 
-  // HMAC mode: per-shop signature verification
+  // HMAC mode: per-shop signature verification with replay prevention
   const shopDomain = request.headers.get("X-Shop-Domain");
   const signature = request.headers.get("X-ContentPilot-Signature");
-  if (!shopDomain || !signature) return { ok: false };
+  const tsHeader = request.headers.get("X-ContentPilot-Timestamp");
+  if (!shopDomain || !signature || !tsHeader) return { ok: false };
+
+  // Reject requests older than 5 minutes (replay prevention)
+  const tsSeconds = parseInt(tsHeader, 10);
+  if (isNaN(tsSeconds) || Math.abs(Date.now() / 1000 - tsSeconds) > 300) {
+    return { ok: false, reason: "timestamp_expired" };
+  }
 
   const session = await prisma.session.findFirst({
     where: { shop: shopDomain, isOnline: false },
@@ -44,9 +51,11 @@ async function verifyRequest(request, rawBody) {
   });
   if (!session?.accessToken) return { ok: false };
 
+  // Include timestamp in signed payload so replay with different ts is rejected
+  const signedPayload = `${tsHeader}.${rawBody}`;
   const expected = crypto
     .createHmac("sha256", session.accessToken)
-    .update(rawBody)
+    .update(signedPayload)
     .digest("hex");
 
   // Use timingSafeEqual to prevent timing attacks

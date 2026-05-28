@@ -1,4 +1,4 @@
-import { useLoaderData, useNavigate, useSearchParams, useSubmit } from "react-router";
+import { useLoaderData, useNavigate, useSearchParams } from "react-router";
 import {
   Page,
   Layout,
@@ -109,7 +109,6 @@ export default function AnalyticsPage() {
   } = useLoaderData();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const submit = useSubmit();
 
   const handleMonthChange = useCallback((month) => {
     setSearchParams({ month });

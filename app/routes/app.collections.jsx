@@ -18,7 +18,7 @@ import {
   Checkbox,
   Divider,
 } from "@shopify/polaris";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
@@ -217,6 +217,22 @@ export default function CollectionsPage() {
   const isGenerating = fetcher.state !== "idle" && fetcher.formData?.get("actionType") === "generate";
   const isPublishing = fetcher.state !== "idle" && fetcher.formData?.get("actionType") === "publish";
   const fetcherData = fetcher.data;
+
+  const prevFetcherData = useRef(null);
+  useEffect(() => {
+    if (fetcherData && fetcherData !== prevFetcherData.current) {
+      prevFetcherData.current = fetcherData;
+      if (typeof window !== "undefined" && window.shopify?.toast) {
+        if (fetcherData.published) {
+          window.shopify.toast.show("Collection content published!", { duration: 4000 });
+        } else if (fetcherData.saved) {
+          window.shopify.toast.show("Collection voice saved!", { duration: 3000 });
+        } else if (fetcherData.error) {
+          window.shopify.toast.show(fetcherData.error, { duration: 5000, isError: true });
+        }
+      }
+    }
+  }, [fetcherData]);
 
   const handleGenerate = useCallback(
     (collection) => {
